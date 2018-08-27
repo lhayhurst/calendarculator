@@ -4,7 +4,7 @@
   "description": "A tool to calculate hours spent in meetings from a calendar.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha"
   },
   "bin": {
     "calendarculator": "bin/index.js"
@@ -21,6 +21,7 @@
     "googleapis": "^28.1.0",
     "mathjs": "^4.1.2",
     "mkdirp": "^0.5.1",
-    "moment": "^2.22.1"
+    "moment": "^2.22.1",
+    "mocha": "^5.2.0"
   }
 }

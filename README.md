@@ -38,6 +38,11 @@ $ calendarculator --credentials client_id.json --people people.csv --start 4/16/
 
 ```
 
+If you provide a ``--output_csv`` command line flag, it will output csv:
+
+```$ calendarculator --credentials client_id.json --people people.csv --start 4/16/18 --end 4/20/18 --output_csv```
+
+
 ## File Format
 
 ```csv

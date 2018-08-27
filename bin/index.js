@@ -22,6 +22,7 @@ const program = require('commander')
   .option('-v, --verbose', 'Log additional information', 'verbose')
   .option('--start [start]', 'Start date')
   .option('--end [end]', 'End date')
+  .option('-o, --output-csv', 'Output as csv', 'outputCSV')
   .parse(process.argv);
 
 if (!(program.people && program.credentials && program.start && program.end)) {
@@ -139,71 +140,108 @@ async function hoursOfMeetings(calendar, email) {
       maxResults: 1000,
       orderBy: 'startTime'
     }, (err, response) => {
-      if (err) return console.log('The API returned an error: ' + err)
-      const { data } = response
-      const events = data.items
-
-      if (events.length) {
-        if (program.verbose) console.log(`Person: ${email}`)
-
-        const hours = events.reduce((sum, event, i) => {
-          if (shouldBeTracked(event, email)) {
-            sum += eventDuration(event)
-
-            const start = event.start.dateTime || event.start.date
-            if (program.verbose) console.log(`Tracking: ${start} - ${event.summary}: ${eventDuration(event)}`)
-          }
-
-          return sum
-        }, 0)
-
-        if (program.verbose) console.log(`Total: ${hours} hours`)
-        return resolve(hours)
-      } else {
-        if (program.verbose) console.log('No upcoming events found.')
+      if (err) {
+        debug.log('The API returned an error: ' + err)
         return resolve(0)
+      }
+      else {
+        const {data} = response
+        const events = data.items
+
+        if (events.length) {
+          if (program.verbose) console.log(`Person: ${email}`)
+
+          const hours = events.reduce((sum, event, i) => {
+            if (shouldBeTracked(event, email)) {
+              sum += eventDuration(event)
+
+              const start = event.start.dateTime || event.start.date
+              if (program.verbose) console.log(`Tracking: ${start} - ${event.summary}: ${eventDuration(event)}`)
+            }
+
+            return sum
+          }, 0)
+
+          if (program.verbose) console.log(`Total: ${hours} hours`)
+          return resolve(hours)
+        } else {
+          if (program.verbose) console.log('No upcoming events found.')
+          return resolve(0)
+        }
       }
     })
   })
 }
 
+function createLabel(hours, role, tracked, label) {
+// Ignore people with 0 hours of accepted meetings, likely
+  // on vacation
+  if (hours > 1) {
+    if (role) {
+      tracked[role] = tracked[role] || []
+      tracked[role].push(hours)
+    }
+    tracked.all.push(hours)
+  } else {
+    label += ' (ignored)'
+  }
+  return label;
+}
+
+async function outputTable(output, calendar) {
+  const table = new Table({head: ['Person', 'Hours in meetings', 'Role']})
+
+  const tracked = {
+    all: []
+  }
+
+  for (var [person, role] of output) {
+    let hours = await hoursOfMeetings(calendar, person)
+    let label = person
+    label = createLabel(hours, role, tracked, label);
+
+    table.push([label, hours.toFixed(1), role || 'N/A'])
+  }
+
+
+  for (var type in tracked) {
+    const formattedType = type.charAt(0).toUpperCase() + type.slice(1)
+    table.push([])
+    table.push([`Mean (${formattedType})`, math.mean(tracked[type]).toFixed(1)])
+    table.push([`Median (${formattedType})`, math.median(tracked[type]).toFixed(1)])
+  }
+
+  console.log(table.toString())
+}
+
+async function outputCSV(output, calendar) {
+  console.log("Person,Hours in meetings,Role")
+  let entries=[];
+
+  const tracked = {
+    all: []
+  }
+
+  for (var [person, role] of output) {
+    let hours = await hoursOfMeetings(calendar, person)
+    let label = person
+
+    label = createLabel(hours, role, tracked, label);
+
+    console.log([label, hours.toFixed(1), role || 'N/A'].join(","))
+  }
+}
+
+
 async function listEvents(auth) {
   const people = parse(await readFile(program.people), async (err, output) => {
     const calendar = google.calendar({version: 'v3', auth})
-    const table = new Table({ head: ['Person', 'Hours in meetings', 'Role'] })
-
-    const tracked = {
-      all: []
+    if (program.output_csv) {
+      await outputCSV(output, calendar)
     }
-
-    for (var [person, role] of output) {
-      let hours = await hoursOfMeetings(calendar, person)
-      let label = person
-
-      // Ignore people with 0 hours of accepted meetings, likely
-      // on vacation
-      if (hours > 1) {
-        if (role) {
-          tracked[role] = tracked[role] || []
-          tracked[role].push(hours)
-        }
-        tracked.all.push(hours)
-      } else {
-        label += ' (ignored)'
-      }
-
-      table.push([ label, hours.toFixed(1), role || 'N/A' ])
+    else {
+      await outputTable(output, calendar);
     }
-
-
-    for (var type in tracked) {
-      const formattedType = type.charAt(0).toUpperCase() + type.slice(1)
-      table.push([])
-      table.push([`Mean (${formattedType})`, math.mean(tracked[type]).toFixed(1) ])
-      table.push([`Median (${formattedType})`, math.median(tracked[type]).toFixed(1) ])
-    }
-
-    console.log(table.toString())
   })
 }
 

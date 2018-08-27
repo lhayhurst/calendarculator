@@ -1,0 +1,5 @@
+{
+  "mealtimes": [ "lunch", "dinner"],
+  "blockedOff": ["DNB", "OOO", "Unavailable", "personal", "DNS"],
+  "social": ["Barry's", "@ HQ" , "drinks", "meet up"]
+}
